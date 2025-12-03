@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/openpi",
+        "${workspaceFolder}/LIBERO"
+    ]
+}
