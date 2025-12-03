@@ -3,11 +3,18 @@ import os
 # Tell XLA to use Triton GEMM, this improves steps/sec by ~30% on some GPUs from https://github.com/huggingface/gym-aloha/tree/main?tab=readme-ov-file#-gpu-rendering-egl
 xla_flags = os.environ.get('XLA_FLAGS', '')
 xla_flags += ' --xla_gpu_triton_gemm_any=True'
+# Fix for bf16 to f16 conversion error: disable automatic mixed precision
+xla_flags += ' --xla_gpu_enable_fast_min_max=false'
 os.environ['XLA_FLAGS'] = xla_flags
 
 import pathlib, copy
 
 import jax
+# Fix for bf16 to f16 conversion error: configure JAX to avoid problematic type conversions
+jax.config.update("jax_default_prng_impl", "rbg")
+jax.config.update("jax_enable_x64", False)
+# Set default precision to avoid bf16->f16 conversions
+jax.config.update("jax_default_matmul_precision", "float32")
 from jaxrl2.agents.pixel_sac.pixel_sac_learner import PixelSACLearner
 from jaxrl2.utils.general_utils import add_batch_dim
 import numpy as np

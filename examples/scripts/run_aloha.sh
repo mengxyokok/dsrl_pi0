@@ -10,6 +10,8 @@ export OPENPI_DATA_HOME=./openpi
 export EXP=./logs/$proj_name; 
 export CUDA_VISIBLE_DEVICES=$device_id
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# Fix for bf16 to f16 conversion error
+export XLA_FLAGS="${XLA_FLAGS} --xla_gpu_enable_fast_min_max=false"
 
 
 pip install mujoco==2.3.7
