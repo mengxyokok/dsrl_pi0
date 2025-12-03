@@ -1,3 +1,3 @@
 from setuptools import setup
 
-setup(name="jaxrl2", packages=["jaxrl2"])
+setup(name="jaxrl2andexamples", packages=["jaxrl2", "examples"])
