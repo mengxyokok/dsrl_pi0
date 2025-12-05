@@ -23,6 +23,7 @@ python3 examples/launch_train_sim.py \
 --discount 0.999 \
 --seed 0 \
 --max_steps 500000  \
+--checkpoint_interval 50000 \
 --eval_interval 10000 \
 --log_interval 500 \
 --eval_episodes 10 \
@@ -31,4 +32,4 @@ python3 examples/launch_train_sim.py \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
---hidden_dims 128 \
+--hidden_dims 128

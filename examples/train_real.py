@@ -76,6 +76,8 @@ def main(variant):
         expname = create_exp_name(variant.prefix, seed=variant.seed)
    
     outputdir = os.path.join(os.environ['EXP'], expname)
+    # Convert to absolute path for orbax checkpoint compatibility
+    outputdir = os.path.abspath(outputdir)
     variant.outputdir = outputdir
     if not os.path.exists(outputdir):
         os.makedirs(outputdir)
