@@ -98,6 +98,13 @@ class InferenceServer:
             compression=None,
             max_size=None,
         ) as server:
+            # 输出服务器地址信息
+            print("=" * 60)
+            print(f"推理服务器已启动")
+            print(f"WebSocket 地址: ws://{self._host}:{self._port}")
+            print(f"IP 地址: {self._host}")
+            print(f"端口: {self._port}")
+            print("=" * 60)
             logger.info(f"推理服务器启动在 ws://{self._host}:{self._port}")
             await server.serve_forever()
     
