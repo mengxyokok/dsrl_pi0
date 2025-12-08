@@ -7,7 +7,7 @@ export MUJOCO_GL=egl
 export PYOPENGL_PLATFORM=egl  
 export MUJOCO_EGL_DEVICE_ID=$device_id
 
-export OPENPI_DATA_HOME=./openpi
+export OPENPI_DATA_HOME=~/.cache/openpi 
 export EXP=./logs/$proj_name; 
 export CUDA_VISIBLE_DEVICES=$device_id
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
@@ -23,7 +23,7 @@ python3 examples/launch_train_sim.py \
 --discount 0.999 \
 --seed 0 \
 --max_steps 500000  \
---checkpoint_interval 50000 \
+--checkpoint_interval 25000 \
 --eval_interval 10000 \
 --log_interval 500 \
 --eval_episodes 10 \
