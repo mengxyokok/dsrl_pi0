@@ -4,6 +4,7 @@
 """
 import argparse
 import os
+from datetime import datetime
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -190,10 +191,16 @@ def run_inference(args):
     rng = jax.random.PRNGKey(args.seed)
 
     # 创建视频保存目录
-    video_dir = args.video_dir
-    if video_dir:
-        os.makedirs(video_dir, exist_ok=True)
-        print(f"视频将保存到: {video_dir}")
+    if args.video_dir:
+        video_dir = args.video_dir
+    else:
+        # 自动生成路径：logs/libero/时间戳_suitename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suite_name = args.task_suite if args.env == 'libero' else args.env
+        video_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
+    
+    os.makedirs(video_dir, exist_ok=True)
+    print(f"视频将保存到: {video_dir}")
 
     # 运行多个 episode
     success_count = 0

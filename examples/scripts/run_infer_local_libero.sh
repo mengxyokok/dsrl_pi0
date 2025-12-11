@@ -52,7 +52,6 @@ if [ -n "$AGENT_CHECKPOINT" ]; then
     --max_steps_per_episode ${MAX_STEPS_PER_EPISODE} \
     --query_freq ${QUERY_FREQ} \
     --action_magnitude ${ACTION_MAGNITUDE} \
-    --video_dir ${VIDEO_DIR} \
     --use_sac_noise
 else
     python3 examples/infer_local.py \
@@ -66,6 +65,5 @@ else
     --num_episodes ${NUM_EPISODES} \
     --max_steps_per_episode ${MAX_STEPS_PER_EPISODE} \
     --query_freq ${QUERY_FREQ} \
-    --action_magnitude ${ACTION_MAGNITUDE} \
-    --video_dir ${VIDEO_DIR}
+    --action_magnitude ${ACTION_MAGNITUDE} 
 fi
