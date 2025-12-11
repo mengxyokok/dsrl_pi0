@@ -4,6 +4,7 @@
 """
 import argparse
 import os
+import csv
 from datetime import datetime
 import numpy as np
 import jax
@@ -131,11 +132,8 @@ def run_single_task_inference(args, task_id, variant, agent_dp, agent, video_bas
     if task_description_str:
         variant.task_description = task_description_str
     
-    # 创建任务特定的视频目录
-    task_video_dir = None
-    if video_base_dir:
-        task_video_dir = os.path.join(video_base_dir, f"task_{task_id:02d}")
-        os.makedirs(task_video_dir, exist_ok=True)
+    # 使用基础视频目录，不创建任务子文件夹
+    task_video_dir = video_base_dir
 
     # RNG 用于生成噪声
     rng = jax.random.PRNGKey(args.seed)
@@ -342,7 +340,10 @@ def run_inference(args):
         video_base_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
     
     os.makedirs(video_base_dir, exist_ok=True)
-    print(f"视频将保存到: {video_base_dir}")
+    # 视频实际文件放在 video_base_dir/videos 下，统计信息放在 video_base_dir
+    video_dir = os.path.join(video_base_dir, "videos")
+    os.makedirs(video_dir, exist_ok=True)
+    print(f"视频将保存到: {video_dir}")
 
     # 确定要运行的任务列表
     if args.task_id == "all" and args.env == 'libero':
@@ -364,7 +365,7 @@ def run_inference(args):
         print(f"开始推理任务 {task_id}/{task_ids[-1]}")
         print(f"{'='*60}")
         
-        stats = run_single_task_inference(args, task_id, variant, agent_dp, agent, video_base_dir)
+        stats = run_single_task_inference(args, task_id, variant, agent_dp, agent, video_dir)
         all_task_stats.append(stats)
         
         print(f"\n任务 {task_id} 完成:")
@@ -398,6 +399,41 @@ def run_inference(args):
     print(f"{'总计':<10} {total_episodes:<10} {total_successes:<12} "
           f"{overall_success_rate*100:>6.1f}%{'':<8} {overall_avg_steps:>10.1f}")
     print(f"{'='*80}")
+    
+    # 保存统计信息到 CSV 文件
+    # 固定文件名：tasks_summary.csv
+    csv_filename = "tasks_summary.csv"
+    csv_path = os.path.join(video_base_dir, csv_filename)
+    
+    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['task_id', 'num_episodes', 'num_successes', 'success_rate', 'task_description', 'average_steps']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+        # 写入表头
+        writer.writeheader()
+        
+        # 写入每个任务的统计信息
+        for stats in all_task_stats:
+            writer.writerow({
+                'task_id': stats['task_id'],
+                'num_episodes': stats['num_episodes'],
+                'num_successes': stats['num_successes'],
+                'success_rate': f"{stats['success_rate']:.4f}",
+                'task_description': stats['task_description'] or "N/A",
+                'average_steps': f"{stats['average_steps']:.2f}"
+            })
+        
+        # 写入总计行
+        writer.writerow({
+            'task_id': '总计',
+            'num_episodes': total_episodes,
+            'num_successes': total_successes,
+            'success_rate': f"{overall_success_rate:.4f}",
+            'task_description': '',
+            'average_steps': f"{overall_avg_steps:.2f}"
+        })
+    
+    print(f"\n统计信息已保存到: {csv_path}")
 
 
 def main():
