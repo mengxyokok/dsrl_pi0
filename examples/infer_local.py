@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 from tqdm import tqdm
 import imageio
+import PIL.Image
 
 from openpi.training import config as openpi_config
 from openpi.policies import policy_config
@@ -273,10 +274,18 @@ def run_inference(args):
         # 保存视频
         if video_dir and len(image_list) > 0:
             video_path = os.path.join(video_dir, f"episode_{episode + 1:03d}.mp4")
-            # 确保所有图像都是 uint8 格式
-            images = [np.asarray(img).astype(np.uint8) for img in image_list]
-            imageio.mimwrite(video_path, images, fps=30)  # 使用 20 fps（与控制频率一致）
-            print(f"已保存视频: {video_path}")
+            # 调整图像大小为 224x224 并确保是 uint8 格式
+            images = []
+            for img in image_list:
+                img_array = np.asarray(img).astype(np.uint8)
+                # 如果图像尺寸不是 224x224，则调整大小
+                if img_array.shape[:2] != (224, 224):
+                    img_pil = PIL.Image.fromarray(img_array)
+                    img_pil = img_pil.resize((224, 224), PIL.Image.Resampling.LANCZOS)
+                    img_array = np.array(img_pil)
+                images.append(img_array)
+            imageio.mimwrite(video_path, images, fps=30)
+            print(f"已保存视频: {video_path} (分辨率: 224x224)")
 
     # 打印汇总
     print(f"\n========== 推理汇总 ==========")
