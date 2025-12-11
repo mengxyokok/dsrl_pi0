@@ -17,13 +17,13 @@ TASK_SUITE="all"  # task suite: libero_spatial, libero_object, libero_goal, libe
 TASK_ID=all             # task ID: 0-89 for libero90, 0-9 for libero10, etc. 或者使用 "all" 对所有任务进行推理
 QUERY_FREQ=20
 ACTION_MAGNITUDE=1.0
-NUM_EPISODES=2
+NUM_EPISODES=20
 MAX_STEPS_PER_EPISODE=900
 VIDEO_DIR=""           # 视频保存目录（如果为空，将自动生成路径）
 VIDEO_FPS=30           # 视频帧率
 
 # SAC agent 检查点路径（可选，如果不需要 SAC noise 可以留空或注释掉）
-# AGENT_CHECKPOINT="/home/mxy/robot/rl/dsrl_pi0/logs/DSRL_pi0_Libero/dsrl_pi0_libero_2025_12_05_15_43_59_0000--s-0/checkpoint50000"
+AGENT_CHECKPOINT="/home/mxy/robot/rl/dsrl_pi0/logs/DSRL_pi0_Libero/dsrl_pi0_libero_2025_12_05_15_43_59_0000--s-0/checkpoint100000"
 
 pip install mujoco==3.3.1
 
