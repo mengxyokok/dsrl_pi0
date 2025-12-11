@@ -292,7 +292,15 @@ def run_inference(args):
         
         # 保存视频
         if video_dir and len(image_list) > 0:
-            video_path = os.path.join(video_dir, f"episode_{episode + 1:03d}.mp4")
+            # 生成视频文件名：rollout_task00_ep000_failure_910steps_30fps.mp4
+            task_id_str = f"task{args.task_id:02d}" if args.env == 'libero' else "task00"
+            ep_str = f"ep{episode:03d}"
+            success_str = "success" if is_success else "failure"
+            steps_str = f"{step_count}steps"
+            fps_str = f"{args.video_fps}fps"
+            video_filename = f"rollout_{task_id_str}_{ep_str}_{success_str}_{steps_str}_{fps_str}.mp4"
+            video_path = os.path.join(video_dir, video_filename)
+            
             # 调整图像大小为 224x224 并确保是 uint8 格式
             images = []
             for img in image_list:
@@ -303,7 +311,7 @@ def run_inference(args):
                     img_pil = img_pil.resize((224, 224), PIL.Image.Resampling.LANCZOS)
                     img_array = np.array(img_pil)
                 images.append(img_array)
-            imageio.mimwrite(video_path, images, fps=30)
+            imageio.mimwrite(video_path, images, fps=args.video_fps)
             print(f"已保存视频: {video_path} (分辨率: 224x224)")
 
     # 打印汇总
@@ -331,6 +339,7 @@ def main():
     parser.add_argument("--action_magnitude", type=float, default=1.0, help="动作幅度")
     parser.add_argument("--use_sac_noise", action="store_true", help="使用 SAC agent 生成噪声（需要提供 agent_checkpoint）")
     parser.add_argument("--video_dir", type=str, default=None, help="视频保存目录（如果指定，将保存每个 episode 的视频）")
+    parser.add_argument("--video_fps", type=int, default=30, help="视频帧率（fps）")
 
     args = parser.parse_args()
     run_inference(args)
