@@ -152,6 +152,14 @@ def run_inference(args):
         'num_cameras': args.num_cameras,
     }
     
+    # 设置环境的最大奖励值（用于判断成功）
+    if args.env == 'libero':
+        env_max_reward = 1
+    elif args.env == 'aloha_cube':
+        env_max_reward = 4
+    else:
+        env_max_reward = 1
+    
     variant = type('Variant', (), {
         'env': args.env,
         'add_states': args.add_states,
@@ -159,6 +167,7 @@ def run_inference(args):
         'num_cameras': args.num_cameras,
         'seed': args.seed,
         'train_kwargs': train_kwargs,
+        'env_max_reward': env_max_reward,
     })()
 
     # 加载模型
@@ -188,11 +197,14 @@ def run_inference(args):
 
     # 运行多个 episode
     success_count = 0
+    env_max_reward = variant.env_max_reward
+    
     for episode in range(args.num_episodes):
         print(f"\n========== Episode {episode + 1}/{args.num_episodes} ==========")
         obs = env.reset()
         done = False
         step_count = 0
+        last_reward = 0  # 记录最后一个 reward
 
         actions = None  # 存储当前的 action chunk
         image_list = []  # 存储图像用于视频
@@ -247,6 +259,7 @@ def run_inference(args):
             # 执行动作
             obs, reward, done, info = env.step(action)
             step_count += 1
+            last_reward = reward  # 更新最后一个 reward
 
             # 收集图像用于视频
             if video_dir:
@@ -263,13 +276,19 @@ def run_inference(args):
             if step_count % 10 == 0:
                 print(f"Step {step_count}, Reward: {reward:.3f}")
 
-        # 检查是否成功
-        success = info.get('success', False) if isinstance(info, dict) else False
-        if success:
-            success_count += 1
-            print(f"Episode {episode + 1}: SUCCESS in {step_count} steps")
+        # 检查是否成功：使用环境的 check_success() 方法（最准确）
+        # 对于 libero，使用 env.check_success()；对于 aloha_cube，使用 reward 判断
+        if args.env == 'libero':
+            is_success = env.check_success()
         else:
-            print(f"Episode {episode + 1}: FAILED after {step_count} steps")
+            # aloha_cube 使用 reward 判断
+            is_success = (last_reward == env_max_reward)
+        
+        if is_success:
+            success_count += 1
+            print(f"Episode {episode + 1}: SUCCESS in {step_count} steps (reward={last_reward})")
+        else:
+            print(f"Episode {episode + 1}: FAILED after {step_count} steps (reward={last_reward})")
         
         # 保存视频
         if video_dir and len(image_list) > 0:
