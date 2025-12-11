@@ -330,116 +330,175 @@ def run_inference(args):
         print("正在加载 SAC agent...")
         agent = load_sac_agent(args.agent_checkpoint, variant)
 
-    # 创建视频保存目录
-    if args.video_dir:
-        video_base_dir = args.video_dir
+    # 确定要运行的 suite 列表
+    if args.task_suite == "all" and args.env == 'libero':
+        # 所有可用的 libero suite
+        task_suites = ["libero_spatial", "libero_object", "libero_goal", "libero_10", "libero_90"]
+        print(f"\n将对所有 {len(task_suites)} 个 suite 进行推理: {task_suites}")
     else:
-        # 自动生成路径：logs/libero/时间戳_suitename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        suite_name = args.task_suite if args.env == 'libero' else args.env
-        video_base_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
+        # 单个 suite
+        task_suites = [args.task_suite]
     
-    os.makedirs(video_base_dir, exist_ok=True)
-    # 视频实际文件放在 video_base_dir/videos 下，统计信息放在 video_base_dir
-    video_dir = os.path.join(video_base_dir, "videos")
-    os.makedirs(video_dir, exist_ok=True)
-    print(f"视频将保存到: {video_dir}")
-
-    # 确定要运行的任务列表
-    if args.task_id == "all" and args.env == 'libero':
-        # 获取该 suite 下的所有任务 ID
-        from libero.libero.benchmark import get_benchmark
-        benchmark = get_benchmark(args.task_suite)()
-        task_ids = list(range(benchmark.get_num_tasks()))
-        print(f"\n将对 {args.task_suite} suite 下的 {len(task_ids)} 个任务进行推理")
-    else:
-        # 单个任务，将字符串转换为整数
-        task_ids = [int(args.task_id)]
+    # 存储所有 suite 的统计信息（用于最终汇总）
+    all_suite_stats = []
     
-    # 存储所有任务的统计信息
-    all_task_stats = []
-    
-    # 对每个任务运行推理
-    for task_id in task_ids:
-        print(f"\n{'='*60}")
-        print(f"开始推理任务 {task_id}/{task_ids[-1]}")
-        print(f"{'='*60}")
+    # 对每个 suite 运行推理
+    for suite_name in task_suites:
+        print(f"\n{'='*80}")
+        print(f"开始推理 Suite: {suite_name}")
+        print(f"{'='*80}")
         
-        stats = run_single_task_inference(args, task_id, variant, agent_dp, agent, video_dir)
-        all_task_stats.append(stats)
+        # 创建该 suite 的视频保存目录
+        if args.video_dir:
+            video_base_dir = args.video_dir
+        else:
+            # 自动生成路径：logs/libero/时间戳_suitename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            video_base_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
         
-        print(f"\n任务 {task_id} 完成:")
-        print(f"  成功率: {stats['success_rate']*100:.1f}% ({stats['num_successes']}/{stats['num_episodes']})")
-        print(f"  平均步数: {stats['average_steps']:.1f}")
-    
-    # 打印汇总表格
-    print(f"\n{'='*80}")
-    print("任务推理汇总")
-    print(f"{'='*80}")
-    print(f"{'Task ID':<10} {'Episodes':<10} {'Successes':<12} {'Success Rate':<15} {'Avg Steps':<12} {'Task Description':<50}")
-    print(f"{'-'*80}")
-    
-    total_episodes = 0
-    total_successes = 0
-    total_steps = 0
-    
-    for stats in all_task_stats:
-        task_desc = stats['task_description'] or "N/A"
-        if len(task_desc) > 50:
-            task_desc = task_desc[:47] + "..."
-        print(f"{stats['task_id']:<10} {stats['num_episodes']:<10} {stats['num_successes']:<12} "
-              f"{stats['success_rate']*100:>6.1f}%{'':<8} {stats['average_steps']:>10.1f}  {task_desc:<50}")
-        total_episodes += stats['num_episodes']
-        total_successes += stats['num_successes']
-        total_steps += stats['average_steps'] * stats['num_episodes']
-    
-    print(f"{'-'*80}")
-    overall_success_rate = total_successes / total_episodes if total_episodes > 0 else 0.0
-    overall_avg_steps = total_steps / total_episodes if total_episodes > 0 else 0.0
-    print(f"{'总计':<10} {total_episodes:<10} {total_successes:<12} "
-          f"{overall_success_rate*100:>6.1f}%{'':<8} {overall_avg_steps:>10.1f}")
-    print(f"{'='*80}")
-    
-    # 保存统计信息到 CSV 文件
-    # 固定文件名：tasks_summary.csv
-    csv_filename = "tasks_summary.csv"
-    csv_path = os.path.join(video_base_dir, csv_filename)
-    
-    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['task_id', 'num_episodes', 'num_successes', 'success_rate', 'task_description', 'average_steps']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        os.makedirs(video_base_dir, exist_ok=True)
+        # 视频实际文件放在 video_base_dir/videos 下，统计信息放在 video_base_dir
+        video_dir = os.path.join(video_base_dir, "videos")
+        os.makedirs(video_dir, exist_ok=True)
+        print(f"视频将保存到: {video_dir}")
         
-        # 写入表头
-        writer.writeheader()
+        # 确定要运行的任务列表
+        if args.task_id == "all" and args.env == 'libero':
+            # 获取该 suite 下的所有任务 ID
+            from libero.libero.benchmark import get_benchmark
+            benchmark = get_benchmark(suite_name)()
+            task_ids = list(range(benchmark.get_num_tasks()))
+            print(f"\n将对 {suite_name} suite 下的 {len(task_ids)} 个任务进行推理")
+        else:
+            # 单个任务，将字符串转换为整数
+            task_ids = [int(args.task_id)]
         
-        # 写入每个任务的统计信息
+        # 存储该 suite 下所有任务的统计信息
+        all_task_stats = []
+        
+        # 对每个任务运行推理
+        for task_id in task_ids:
+            print(f"\n{'='*60}")
+            print(f"开始推理任务 {task_id}/{task_ids[-1]} (Suite: {suite_name})")
+            print(f"{'='*60}")
+            
+            # 临时修改 args.task_suite 以便 create_env 使用正确的 suite
+            original_task_suite = args.task_suite
+            args.task_suite = suite_name
+            
+            stats = run_single_task_inference(args, task_id, variant, agent_dp, agent, video_dir)
+            # 在统计信息中添加 suite 名称
+            stats['task_suite'] = suite_name
+            all_task_stats.append(stats)
+            
+            # 恢复原始 task_suite
+            args.task_suite = original_task_suite
+            
+            print(f"\n任务 {task_id} 完成:")
+            print(f"  成功率: {stats['success_rate']*100:.1f}% ({stats['num_successes']}/{stats['num_episodes']})")
+            print(f"  平均步数: {stats['average_steps']:.1f}")
+        
+        # 打印该 suite 的汇总表格
+        print(f"\n{'='*80}")
+        print(f"Suite {suite_name} 任务推理汇总")
+        print(f"{'='*80}")
+        print(f"{'Task ID':<10} {'Episodes':<10} {'Successes':<12} {'Success Rate':<15} {'Avg Steps':<12} {'Task Description':<50}")
+        print(f"{'-'*80}")
+        
+        suite_total_episodes = 0
+        suite_total_successes = 0
+        suite_total_steps = 0
+        
         for stats in all_task_stats:
+            task_desc = stats['task_description'] or "N/A"
+            if len(task_desc) > 50:
+                task_desc = task_desc[:47] + "..."
+            print(f"{stats['task_id']:<10} {stats['num_episodes']:<10} {stats['num_successes']:<12} "
+                  f"{stats['success_rate']*100:>6.1f}%{'':<8} {stats['average_steps']:>10.1f}  {task_desc:<50}")
+            suite_total_episodes += stats['num_episodes']
+            suite_total_successes += stats['num_successes']
+            suite_total_steps += stats['average_steps'] * stats['num_episodes']
+        
+        print(f"{'-'*80}")
+        suite_success_rate = suite_total_successes / suite_total_episodes if suite_total_episodes > 0 else 0.0
+        suite_avg_steps = suite_total_steps / suite_total_episodes if suite_total_episodes > 0 else 0.0
+        print(f"{'总计':<10} {suite_total_episodes:<10} {suite_total_successes:<12} "
+              f"{suite_success_rate*100:>6.1f}%{'':<8} {suite_avg_steps:>10.1f}")
+        print(f"{'='*80}")
+        
+        # 保存该 suite 的统计信息到 CSV 文件
+        csv_filename = "tasks_summary.csv"
+        csv_path = os.path.join(video_base_dir, csv_filename)
+        
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['task_suite', 'task_id', 'num_episodes', 'num_successes', 'success_rate', 'task_description', 'average_steps']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            # 写入表头
+            writer.writeheader()
+            
+            # 写入每个任务的统计信息
+            for stats in all_task_stats:
+                writer.writerow({
+                    'task_suite': stats['task_suite'],
+                    'task_id': stats['task_id'],
+                    'num_episodes': stats['num_episodes'],
+                    'num_successes': stats['num_successes'],
+                    'success_rate': f"{stats['success_rate']:.4f}",
+                    'task_description': stats['task_description'] or "N/A",
+                    'average_steps': f"{stats['average_steps']:.2f}"
+                })
+            
+            # 写入总计行
             writer.writerow({
-                'task_id': stats['task_id'],
-                'num_episodes': stats['num_episodes'],
-                'num_successes': stats['num_successes'],
-                'success_rate': f"{stats['success_rate']:.4f}",
-                'task_description': stats['task_description'] or "N/A",
-                'average_steps': f"{stats['average_steps']:.2f}"
+                'task_suite': suite_name,
+                'task_id': '总计',
+                'num_episodes': suite_total_episodes,
+                'num_successes': suite_total_successes,
+                'success_rate': f"{suite_success_rate:.4f}",
+                'task_description': '',
+                'average_steps': f"{suite_avg_steps:.2f}"
             })
         
-        # 写入总计行
-        writer.writerow({
-            'task_id': '总计',
-            'num_episodes': total_episodes,
-            'num_successes': total_successes,
-            'success_rate': f"{overall_success_rate:.4f}",
-            'task_description': '',
-            'average_steps': f"{overall_avg_steps:.2f}"
-        })
+        print(f"\n统计信息已保存到: {csv_path}")
+        
+        # 保存该 suite 的统计信息到总列表
+        all_suite_stats.extend(all_task_stats)
     
-    print(f"\n统计信息已保存到: {csv_path}")
+    # 如果运行了多个 suite，打印总体汇总
+    if len(task_suites) > 1:
+        print(f"\n{'='*80}")
+        print("所有 Suite 总体汇总")
+        print(f"{'='*80}")
+        print(f"{'Suite':<20} {'Task ID':<10} {'Episodes':<10} {'Successes':<12} {'Success Rate':<15} {'Avg Steps':<12} {'Task Description':<50}")
+        print(f"{'-'*80}")
+        
+        total_episodes = 0
+        total_successes = 0
+        total_steps = 0
+        
+        for stats in all_suite_stats:
+            task_desc = stats['task_description'] or "N/A"
+            if len(task_desc) > 50:
+                task_desc = task_desc[:47] + "..."
+            print(f"{stats['task_suite']:<20} {stats['task_id']:<10} {stats['num_episodes']:<10} {stats['num_successes']:<12} "
+                  f"{stats['success_rate']*100:>6.1f}%{'':<8} {stats['average_steps']:>10.1f}  {task_desc:<50}")
+            total_episodes += stats['num_episodes']
+            total_successes += stats['num_successes']
+            total_steps += stats['average_steps'] * stats['num_episodes']
+        
+        print(f"{'-'*80}")
+        overall_success_rate = total_successes / total_episodes if total_episodes > 0 else 0.0
+        overall_avg_steps = total_steps / total_episodes if total_episodes > 0 else 0.0
+        print(f"{'总计':<20} {'':<10} {total_episodes:<10} {total_successes:<12} "
+              f"{overall_success_rate*100:>6.1f}%{'':<8} {overall_avg_steps:>10.1f}")
+        print(f"{'='*80}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="本地推理测试")
     parser.add_argument("--env", type=str, default="libero", choices=["libero", "aloha_cube"], help="环境类型")
-    parser.add_argument("--task_suite", type=str, default="libero_90", help="任务套件（用于 libero）:  libero_spatial, libero_object, libero_goal, libero_10, libero_90")
+    parser.add_argument("--task_suite", type=str, default="libero_90", help="任务套件（用于 libero）:  libero_spatial, libero_object, libero_goal, libero_10, libero_90, 或 'all'（对所有 suite 进行推理）")
     parser.add_argument("--task_id", type=str, default="57", help="任务 ID（用于 libero），可以是数字或 'all'（对所有任务进行推理）")
     parser.add_argument("--add_states", action="store_true", help="是否添加状态信息")
     parser.add_argument("--agent_checkpoint", type=str, default=None, help="SAC agent 检查点路径（可选）")

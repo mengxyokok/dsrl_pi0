@@ -13,7 +13,7 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # 推理参数
 ENV="libero"
-TASK_SUITE="libero_10"  # task suite: libero_spatial, libero_object, libero_goal, libero_10, libero_90
+TASK_SUITE="all"  # task suite: libero_spatial, libero_object, libero_goal, libero_10, libero_90
 TASK_ID=all             # task ID: 0-89 for libero90, 0-9 for libero10, etc. 或者使用 "all" 对所有任务进行推理
 QUERY_FREQ=20
 ACTION_MAGNITUDE=1.0
