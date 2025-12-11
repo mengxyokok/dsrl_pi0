@@ -124,90 +124,29 @@ def create_env(env_type, task_suite=None, task_id=None):
         raise ValueError(f"不支持的环境类型: {env_type}")
 
 
-def run_inference(args):
-    """运行推理"""
-    # 创建 variant 对象
-    # 注意：train_kwargs 必须与训练时使用的参数完全一致
-    train_kwargs = {
-        'actor_lr': 1e-4,
-        'critic_lr': 3e-4,
-        'temp_lr': 3e-4,
-        'hidden_dims': (128, 128, 128),
-        'cnn_features': (32, 32, 32, 32),
-        'cnn_strides': (2, 1, 1, 1),
-        'cnn_padding': 'VALID',
-        'latent_dim': 50,
-        'discount': 0.999,
-        'tau': 0.005,
-        'critic_reduction': 'mean',
-        'dropout_rate': 0.0,
-        'aug_next': 1,
-        'use_bottleneck': True,
-        'encoder_type': 'small',  # 重要：必须与训练时一致
-        'encoder_norm': 'group',
-        'use_spatial_softmax': True,
-        'softmax_temperature': -1,
-        'target_entropy': 'auto',
-        'num_qs': 10,
-        'action_magnitude': 1.0,
-        'num_cameras': args.num_cameras,
-    }
-    
-    # 设置环境的最大奖励值（用于判断成功）
-    if args.env == 'libero':
-        env_max_reward = 1
-    elif args.env == 'aloha_cube':
-        env_max_reward = 4
-    else:
-        env_max_reward = 1
-    
-    variant = type('Variant', (), {
-        'env': args.env,
-        'add_states': args.add_states,
-        'resize_image': args.resize_image,
-        'num_cameras': args.num_cameras,
-        'seed': args.seed,
-        'train_kwargs': train_kwargs,
-        'env_max_reward': env_max_reward,
-    })()
-
-    # 加载模型
-    print("正在加载 pi0 策略...")
-    agent_dp = load_agent_dp(args.env)
-
-    # 可选：加载 SAC agent
-    agent = None
-    if args.agent_checkpoint:
-        print("正在加载 SAC agent...")
-        agent = load_sac_agent(args.agent_checkpoint, variant)
-
+def run_single_task_inference(args, task_id, variant, agent_dp, agent, video_base_dir):
+    """对单个任务运行推理"""
     # 创建环境
-    print(f"正在创建环境: {args.env}")
-    env, task_description_str = create_env(args.env, args.task_suite, args.task_id)
+    env, task_description_str = create_env(args.env, args.task_suite, task_id)
     if task_description_str:
         variant.task_description = task_description_str
+    
+    # 创建任务特定的视频目录
+    task_video_dir = None
+    if video_base_dir:
+        task_video_dir = os.path.join(video_base_dir, f"task_{task_id:02d}")
+        os.makedirs(task_video_dir, exist_ok=True)
 
     # RNG 用于生成噪声
     rng = jax.random.PRNGKey(args.seed)
 
-    # 创建视频保存目录
-    if args.video_dir:
-        video_dir = args.video_dir
-    else:
-        # 自动生成路径：logs/libero/时间戳_suitename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        suite_name = args.task_suite if args.env == 'libero' else args.env
-        video_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
-    
-    os.makedirs(video_dir, exist_ok=True)
-    print(f"视频将保存到: {video_dir}")
-
     # 运行多个 episode
     success_count = 0
+    total_steps = 0
     env_max_reward = variant.env_max_reward
     
     for episode in range(args.num_episodes):
-        print(f"\n========== Episode {episode + 1}/{args.num_episodes} ==========")
+        print(f"\n========== Task {task_id}, Episode {episode + 1}/{args.num_episodes} ==========")
         obs = env.reset()
         done = False
         step_count = 0
@@ -269,7 +208,7 @@ def run_inference(args):
             last_reward = reward  # 更新最后一个 reward
 
             # 收集图像用于视频
-            if video_dir:
+            if task_video_dir:
                 if args.env == 'libero' and 'agentview_image' in obs:
                     # libero 环境：翻转图像（因为观察是上下颠倒的）
                     img = obs['agentview_image'][::-1, ::-1]
@@ -293,20 +232,22 @@ def run_inference(args):
         
         if is_success:
             success_count += 1
-            print(f"Episode {episode + 1}: SUCCESS in {step_count} steps (reward={last_reward})")
+            print(f"Task {task_id}, Episode {episode + 1}: SUCCESS in {step_count} steps (reward={last_reward})")
         else:
-            print(f"Episode {episode + 1}: FAILED after {step_count} steps (reward={last_reward})")
+            print(f"Task {task_id}, Episode {episode + 1}: FAILED after {step_count} steps (reward={last_reward})")
+        
+        total_steps += step_count
         
         # 保存视频
-        if video_dir and len(image_list) > 0:
+        if task_video_dir and len(image_list) > 0:
             # 生成视频文件名：rollout_task00_ep000_failure_910steps_30fps.mp4
-            task_id_str = f"task{args.task_id:02d}" if args.env == 'libero' else "task00"
+            task_id_str = f"task{task_id:02d}" if args.env == 'libero' else "task00"
             ep_str = f"ep{episode:03d}"
             success_str = "success" if is_success else "failure"
             steps_str = f"{step_count}steps"
             fps_str = f"{args.video_fps}fps"
             video_filename = f"rollout_{task_id_str}_{ep_str}_{success_str}_{steps_str}_{fps_str}.mp4"
-            video_path = os.path.join(video_dir, video_filename)
+            video_path = os.path.join(task_video_dir, video_filename)
             
             # 调整图像大小为 224x224 并确保是 uint8 格式
             images = []
@@ -320,21 +261,150 @@ def run_inference(args):
                 images.append(img_array)
             imageio.mimwrite(video_path, images, fps=args.video_fps)
             print(f"已保存视频: {video_path} (分辨率: 224x224)")
-
-    # 打印汇总
-    print(f"\n========== 推理汇总 ==========")
-    print(f"总 Episodes: {args.num_episodes}")
-    print(f"成功: {success_count}")
-    print(f"成功率: {success_count / args.num_episodes * 100:.1f}%")
-
+    
     env.close()
+    
+    # 返回统计信息
+    return {
+        'task_id': task_id,
+        'num_episodes': args.num_episodes,
+        'num_successes': success_count,
+        'success_rate': success_count / args.num_episodes if args.num_episodes > 0 else 0.0,
+        'task_description': task_description_str,
+        'average_steps': total_steps / args.num_episodes if args.num_episodes > 0 else 0.0,
+    }
+
+
+def run_inference(args):
+    """运行推理"""
+    # 创建 variant 对象
+    # 注意：train_kwargs 必须与训练时使用的参数完全一致
+    train_kwargs = {
+        'actor_lr': 1e-4,
+        'critic_lr': 3e-4,
+        'temp_lr': 3e-4,
+        'hidden_dims': (128, 128, 128),
+        'cnn_features': (32, 32, 32, 32),
+        'cnn_strides': (2, 1, 1, 1),
+        'cnn_padding': 'VALID',
+        'latent_dim': 50,
+        'discount': 0.999,
+        'tau': 0.005,
+        'critic_reduction': 'mean',
+        'dropout_rate': 0.0,
+        'aug_next': 1,
+        'use_bottleneck': True,
+        'encoder_type': 'small',  # 重要：必须与训练时一致
+        'encoder_norm': 'group',
+        'use_spatial_softmax': True,
+        'softmax_temperature': -1,
+        'target_entropy': 'auto',
+        'num_qs': 10,
+        'action_magnitude': 1.0,
+        'num_cameras': args.num_cameras,
+    }
+    
+    # 设置环境的最大奖励值（用于判断成功）
+    if args.env == 'libero':
+        env_max_reward = 1
+    elif args.env == 'aloha_cube':
+        env_max_reward = 4
+    else:
+        env_max_reward = 1
+    
+    variant = type('Variant', (), {
+        'env': args.env,
+        'add_states': args.add_states,
+        'resize_image': args.resize_image,
+        'num_cameras': args.num_cameras,
+        'seed': args.seed,
+        'train_kwargs': train_kwargs,
+        'env_max_reward': env_max_reward,
+    })()
+
+    # 加载模型
+    print("正在加载 pi0 策略...")
+    agent_dp = load_agent_dp(args.env)
+
+    # 可选：加载 SAC agent
+    agent = None
+    if args.agent_checkpoint:
+        print("正在加载 SAC agent...")
+        agent = load_sac_agent(args.agent_checkpoint, variant)
+
+    # 创建视频保存目录
+    if args.video_dir:
+        video_base_dir = args.video_dir
+    else:
+        # 自动生成路径：logs/libero/时间戳_suitename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suite_name = args.task_suite if args.env == 'libero' else args.env
+        video_base_dir = os.path.join("logs", args.env, f"{timestamp}_{suite_name}")
+    
+    os.makedirs(video_base_dir, exist_ok=True)
+    print(f"视频将保存到: {video_base_dir}")
+
+    # 确定要运行的任务列表
+    if args.task_id == "all" and args.env == 'libero':
+        # 获取该 suite 下的所有任务 ID
+        from libero.libero.benchmark import get_benchmark
+        benchmark = get_benchmark(args.task_suite)()
+        task_ids = list(range(benchmark.get_num_tasks()))
+        print(f"\n将对 {args.task_suite} suite 下的 {len(task_ids)} 个任务进行推理")
+    else:
+        # 单个任务，将字符串转换为整数
+        task_ids = [int(args.task_id)]
+    
+    # 存储所有任务的统计信息
+    all_task_stats = []
+    
+    # 对每个任务运行推理
+    for task_id in task_ids:
+        print(f"\n{'='*60}")
+        print(f"开始推理任务 {task_id}/{task_ids[-1]}")
+        print(f"{'='*60}")
+        
+        stats = run_single_task_inference(args, task_id, variant, agent_dp, agent, video_base_dir)
+        all_task_stats.append(stats)
+        
+        print(f"\n任务 {task_id} 完成:")
+        print(f"  成功率: {stats['success_rate']*100:.1f}% ({stats['num_successes']}/{stats['num_episodes']})")
+        print(f"  平均步数: {stats['average_steps']:.1f}")
+    
+    # 打印汇总表格
+    print(f"\n{'='*80}")
+    print("任务推理汇总")
+    print(f"{'='*80}")
+    print(f"{'Task ID':<10} {'Episodes':<10} {'Successes':<12} {'Success Rate':<15} {'Avg Steps':<12} {'Task Description':<50}")
+    print(f"{'-'*80}")
+    
+    total_episodes = 0
+    total_successes = 0
+    total_steps = 0
+    
+    for stats in all_task_stats:
+        task_desc = stats['task_description'] or "N/A"
+        if len(task_desc) > 50:
+            task_desc = task_desc[:47] + "..."
+        print(f"{stats['task_id']:<10} {stats['num_episodes']:<10} {stats['num_successes']:<12} "
+              f"{stats['success_rate']*100:>6.1f}%{'':<8} {stats['average_steps']:>10.1f}  {task_desc:<50}")
+        total_episodes += stats['num_episodes']
+        total_successes += stats['num_successes']
+        total_steps += stats['average_steps'] * stats['num_episodes']
+    
+    print(f"{'-'*80}")
+    overall_success_rate = total_successes / total_episodes if total_episodes > 0 else 0.0
+    overall_avg_steps = total_steps / total_episodes if total_episodes > 0 else 0.0
+    print(f"{'总计':<10} {total_episodes:<10} {total_successes:<12} "
+          f"{overall_success_rate*100:>6.1f}%{'':<8} {overall_avg_steps:>10.1f}")
+    print(f"{'='*80}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="本地推理测试")
     parser.add_argument("--env", type=str, default="libero", choices=["libero", "aloha_cube"], help="环境类型")
     parser.add_argument("--task_suite", type=str, default="libero_90", help="任务套件（用于 libero）:  libero_spatial, libero_object, libero_goal, libero_10, libero_90")
-    parser.add_argument("--task_id", type=int, default=57, help="任务 ID（用于 libero）")
+    parser.add_argument("--task_id", type=str, default="57", help="任务 ID（用于 libero），可以是数字或 'all'（对所有任务进行推理）")
     parser.add_argument("--add_states", action="store_true", help="是否添加状态信息")
     parser.add_argument("--agent_checkpoint", type=str, default=None, help="SAC agent 检查点路径（可选）")
     parser.add_argument("--resize_image", type=int, default=64, help="图像调整大小（必须与训练时一致，libero 默认 64）")
