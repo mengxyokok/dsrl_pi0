@@ -12,6 +12,7 @@ import jax.numpy as jnp
 from tqdm import tqdm
 import imageio
 import PIL.Image
+import yaml
 
 from openpi.training import config as openpi_config
 from openpi.policies import policy_config
@@ -461,6 +462,14 @@ def run_inference(args):
             })
         
         print(f"\n统计信息已保存到: {csv_path}")
+        
+        # 保存参数到 args.yml（与 CSV 同目录）
+        args_yaml_path = os.path.join(video_base_dir, "args.yml")
+        args_to_save = dict(vars(args))
+        args_to_save['task_suite'] = suite_name  # 确保记录当前 suite
+        with open(args_yaml_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(args_to_save, f, allow_unicode=True, sort_keys=False)
+        print(f"参数已保存到: {args_yaml_path}")
         
         # 保存该 suite 的统计信息到总列表
         all_suite_stats.extend(all_task_stats)
