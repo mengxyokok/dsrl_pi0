@@ -13,7 +13,8 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # 推理参数
 ENV="libero"
-TASK_DESCRIPTION="libero90-task57"
+TASK_SUITE="libero_90"  # task suite: libero_spatial, libero_object, libero_goal, libero_10, libero_90
+TASK_ID=57             # task ID: 0-89 for libero90, 0-9 for libero10, etc.
 QUERY_FREQ=20
 ACTION_MAGNITUDE=1.0
 NUM_EPISODES=20
@@ -22,12 +23,17 @@ MAX_STEPS_PER_EPISODE=900
 # SAC agent 检查点路径（可选，如果不需要 SAC noise 可以留空或注释掉）
 AGENT_CHECKPOINT="/home/mxy/robot/rl/dsrl_pi0/logs/DSRL_pi0_Libero/dsrl_pi0_libero_2025_12_05_15_43_59_0000--s-0/checkpoint500000"
 
+# 视频保存目录（如果不需要保存视频，可以留空或注释掉）
+VIDEO_DIR="./videos/infer_local_libero"
+
 pip install mujoco==3.3.1
+
 
 echo "=================================================="
 echo "运行 LIBERO 本地推理测试"
 echo "环境: ${ENV}"
-echo "任务: ${TASK_DESCRIPTION}"
+echo "Task Suite: ${TASK_SUITE}"
+echo "Task ID: ${TASK_ID}"
 echo "Episodes: ${NUM_EPISODES}"
 echo "=================================================="
 
@@ -35,29 +41,31 @@ echo "=================================================="
 if [ -n "$AGENT_CHECKPOINT" ]; then
     python3 examples/infer_local.py \
     --env ${ENV} \
-    --task_description ${TASK_DESCRIPTION} \
+    --task_suite ${TASK_SUITE} \
+    --task_id ${TASK_ID} \
     --add_states \
     --agent_checkpoint ${AGENT_CHECKPOINT} \
-    --resize_image 244 \
+    --resize_image 64 \
     --num_cameras 1 \
     --seed 42 \
     --num_episodes ${NUM_EPISODES} \
     --max_steps_per_episode ${MAX_STEPS_PER_EPISODE} \
     --query_freq ${QUERY_FREQ} \
     --action_magnitude ${ACTION_MAGNITUDE} \
-    --render \
+    --video_dir ${VIDEO_DIR} \
     --use_sac_noise
 else
     python3 examples/infer_local.py \
     --env ${ENV} \
-    --task_description ${TASK_DESCRIPTION} \
+    --task_suite ${TASK_SUITE} \
+    --task_id ${TASK_ID} \
     --add_states \
-    --resize_image 244 \
+    --resize_image 64 \
     --num_cameras 1 \
     --seed 42 \
     --num_episodes ${NUM_EPISODES} \
     --max_steps_per_episode ${MAX_STEPS_PER_EPISODE} \
     --query_freq ${QUERY_FREQ} \
     --action_magnitude ${ACTION_MAGNITUDE} \
-    --render
+    --video_dir ${VIDEO_DIR}
 fi
