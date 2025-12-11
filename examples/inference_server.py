@@ -179,10 +179,28 @@ class InferenceServer:
         }
         """
         obs = message.get("obs")
+        if obs is None:
+            raise ValueError("观察数据 'obs' 不能为空")
+        
         noise = message.get("noise")
         use_raw_obs = message.get("use_raw_obs", True)
         
         if use_raw_obs:
+            # 验证观察数据格式
+            if self._env_type == 'libero':
+                required_keys = ["agentview_image", "robot0_eye_in_hand_image", 
+                                "robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
+                missing_keys = [key for key in required_keys if key not in obs or obs[key] is None]
+                if missing_keys:
+                    raise ValueError(f"观察数据缺少必需的字段或字段为 None: {missing_keys}")
+            elif self._env_type == 'aloha_cube':
+                if "pixels" not in obs or obs["pixels"] is None:
+                    raise ValueError("观察数据缺少 'pixels' 字段或字段为 None")
+                if "top" not in obs["pixels"] or obs["pixels"]["top"] is None:
+                    raise ValueError("观察数据缺少 'pixels.top' 字段或字段为 None")
+                if "agent_pos" not in obs or obs["agent_pos"] is None:
+                    raise ValueError("观察数据缺少 'agent_pos' 字段或字段为 None")
+            
             # 从原始观察转换为 pi0 输入格式
             obs_pi_zero = obs_to_pi_zero_input(obs, self._variant)
             # 同时获取用于 agent 的观察
