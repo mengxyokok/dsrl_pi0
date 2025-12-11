@@ -337,8 +337,11 @@ def run_inference(args):
         task_suites = ["libero_spatial", "libero_object", "libero_goal", "libero_10", "libero_90"]
         print(f"\n将对所有 {len(task_suites)} 个 suite 进行推理: {task_suites}")
     else:
-        # 单个 suite
-        task_suites = [args.task_suite]
+        # 支持逗号分隔的多个 suite
+        if isinstance(args.task_suite, str) and "," in args.task_suite:
+            task_suites = [s.strip() for s in args.task_suite.split(",") if s.strip()]
+        else:
+            task_suites = [args.task_suite]
     
     # 存储所有 suite 的统计信息（用于最终汇总）
     all_suite_stats = []
@@ -507,7 +510,14 @@ def run_inference(args):
 def main():
     parser = argparse.ArgumentParser(description="本地推理测试")
     parser.add_argument("--env", type=str, default="libero", choices=["libero", "aloha_cube"], help="环境类型")
-    parser.add_argument("--task_suite", type=str, default="libero_90", help="任务套件（用于 libero）:  libero_spatial, libero_object, libero_goal, libero_10, libero_90, 或 'all'（对所有 suite 进行推理）")
+    parser.add_argument(
+        "--task_suite",
+        type=str,
+        default="libero_90",
+        help="任务套件（用于 libero），可用: libero_spatial, libero_object, libero_goal, libero_10, libero_90；"
+             "也可使用逗号分隔多个套件，例如 'libero_spatial,libero_goal'；"
+             "或使用 'all' 对全部套件进行推理",
+    )
     parser.add_argument("--task_id", type=str, default="57", help="任务 ID（用于 libero），可以是数字或 'all'（对所有任务进行推理）")
     parser.add_argument("--add_states", action="store_true", help="是否添加状态信息")
     parser.add_argument("--agent_checkpoint", type=str, default=None, help="SAC agent 检查点路径（可选）")
